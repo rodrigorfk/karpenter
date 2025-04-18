@@ -29,11 +29,12 @@ import (
 
 // Well known labels and resources
 const (
-	ArchitectureAmd64    = "amd64"
-	ArchitectureArm64    = "arm64"
-	CapacityTypeSpot     = "spot"
-	CapacityTypeOnDemand = "on-demand"
-	CapacityTypeReserved = "reserved"
+	ArchitectureAmd64                    = "amd64"
+	ArchitectureArm64                    = "arm64"
+	CapacityTypeSpot                     = "spot"
+	CapacityTypeOnDemand                 = "on-demand"
+	CapacityTypeReserved                 = "reserved"
+	PodDisruptionBudgetPolicyDisruptable = "disruptable"
 )
 
 // Karpenter specific domains and labels
@@ -51,6 +52,7 @@ const (
 	NodePoolHashAnnotationKey                  = apis.Group + "/nodepool-hash"
 	NodePoolHashVersionAnnotationKey           = apis.Group + "/nodepool-hash-version"
 	NodeClaimTerminationTimestampAnnotationKey = apis.Group + "/nodeclaim-termination-timestamp"
+	PodDisruptionBudgetPolicyAnnotationKey     = apis.Group + "/pod-disruption-budget-policy"
 )
 
 // Karpenter specific finalizers

@@ -18,6 +18,7 @@ package pdb
 
 import (
 	"context"
+	karpenter_v1 "sigs.k8s.io/karpenter/pkg/apis/v1"
 
 	v1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
@@ -64,9 +65,21 @@ func (l Limits) CanEvictPods(pods []*v1.Pod) (client.ObjectKey, bool) {
 			if pdb.key.Namespace == pod.ObjectMeta.Namespace {
 				if pdb.selector.Matches(labels.Set(pod.Labels)) {
 
+					ignorePod := false
+
+					// If the pod-disruption-budget-policy annotations is set to "disruptable" then the pod should be
+					// ignored, regardless of the PDB state, meaning the pod/node can be considered for eviction
+					// during karpenter's disruption process calculation, but might be blocked when a node is effectively
+					// being drained and the pod was supposed to be evicted, Karpenter won't be responsible
+					// for rescuing the pod/node on such situations, as an external controller would be responsible for
+					// that.
+					if pdb.policyValue == karpenter_v1.PodDisruptionBudgetPolicyDisruptable {
+						ignorePod = true
+						continue
+					}
+
 					// if the PDB policy is set to allow evicting unhealthy pods, then it won't stop us from
 					// evicting unhealthy pods
-					ignorePod := false
 					if pdb.canAlwaysEvictUnhealthyPods {
 						for _, c := range pod.Status.Conditions {
 							if c.Type == v1.PodReady && c.Status == v1.ConditionFalse {
@@ -91,6 +104,7 @@ type pdbItem struct {
 	selector                    labels.Selector
 	disruptionsAllowed          int32
 	canAlwaysEvictUnhealthyPods bool
+	policyValue                 string
 }
 
 func newPdb(pdb policyv1.PodDisruptionBudget) (*pdbItem, error) {
@@ -100,6 +114,11 @@ func newPdb(pdb policyv1.PodDisruptionBudget) (*pdbItem, error) {
 	}
 	canAlwaysEvictUnhealthyPods := false
 
+	policyValue := ""
+	if value, ok := pdb.Annotations[karpenter_v1.PodDisruptionBudgetPolicyAnnotationKey]; ok {
+		policyValue = value
+	}
+
 	if pdb.Spec.UnhealthyPodEvictionPolicy != nil && *pdb.Spec.UnhealthyPodEvictionPolicy == policyv1.AlwaysAllow {
 		canAlwaysEvictUnhealthyPods = true
 	}
@@ -108,5 +127,6 @@ func newPdb(pdb policyv1.PodDisruptionBudget) (*pdbItem, error) {
 		selector:                    selector,
 		disruptionsAllowed:          pdb.Status.DisruptionsAllowed,
 		canAlwaysEvictUnhealthyPods: canAlwaysEvictUnhealthyPods,
+		policyValue:                 policyValue,
 	}, nil
 }
