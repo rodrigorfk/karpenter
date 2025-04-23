@@ -307,12 +307,7 @@ func (p *Provisioner) Schedule(ctx context.Context) (scheduler.Results, error) {
 		return scheduler.Results{}, err
 	}
 
-	pods := append(pendingPods, deletingNodePods...)
-	// nothing to schedule, so just return success
-	if len(pods) == 0 {
-		return scheduler.Results{}, nil
-	}
-	if len(pendingPods) == 0 {
+	if len(pendingPods) == 0 && len(deletingNodePods) > 0 {
 		log.FromContext(ctx).WithValues(
 			"DeletingNodePods", pretty.Slice(lo.Map(deletingNodePods, func(p *corev1.Pod, _ int) string {
 				return klog.KObj(p).String()
@@ -321,7 +316,13 @@ func (p *Provisioner) Schedule(ctx context.Context) (scheduler.Results, error) {
 		).Info("found only deleting node pod(s), deferring scheduling decision")
 		return scheduler.Results{}, nil
 	}
-	log.FromContext(ctx).V(1).WithValues("pending-pods", len(pendingPods), "deleting-pods", len(deletingNodePods)).Info("computing scheduling decision for provisionable pod(s)")
+
+	pods := append(pendingPods, deletingNodePods...)
+	// nothing to schedule, so just return success
+	if len(pods) == 0 {
+		return scheduler.Results{}, nil
+	}
+	log.FromContext(ctx).WithValues("pending-pods", len(pendingPods), "deleting-pods", len(deletingNodePods)).Info("computing scheduling decision for provisionable pod(s)")
 
 	opts := []scheduler.Options{scheduler.DisableReservedCapacityFallback}
 	if options.FromContext(ctx).PreferencePolicy == options.PreferencePolicyIgnore {
