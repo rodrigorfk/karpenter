@@ -189,6 +189,55 @@ var _ = Describe("CanEvictPods", func() {
 			MaxUnavailable: lo.ToPtr(intstr.FromInt(0)),
 		})),
 	)
+	DescribeTable("can evict pods when disruptions are annotated with pod-disruption-budget-policy=disruptable",
+		func(podDisruptionBudget *policyv1.PodDisruptionBudget) {
+			pod1 := test.Pod(test.PodOptions{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: podLabels,
+				},
+			})
+			pod2 := test.Pod(test.PodOptions{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: podLabels,
+				},
+			})
+			ExpectApplied(ctx, env.Client, podDisruptionBudget, pod1, pod2)
+
+			limits, err := pdb.NewLimits(ctx, env.Client)
+			Expect(err).NotTo(HaveOccurred())
+
+			violatingPDB, canEvict := limits.CanEvictPods([]*v1.Pod{pod1, pod2})
+			Expect(violatingPDB).To(Equal(client.ObjectKey{}))
+			Expect(canEvict).To(BeTrue())
+		},
+		Entry("100% min available", test.PodDisruptionBudget(test.PDBOptions{
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{
+					karpenterv1.PodDisruptionBudgetPolicyAnnotationKey: string(karpenterv1.PodDisruptionBudgetPolicyDisruptable),
+				},
+			},
+			Labels:       podLabels,
+			MinAvailable: lo.ToPtr(intstr.FromString("100%")),
+		})),
+		Entry("0% max unavailable", test.PodDisruptionBudget(test.PDBOptions{
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{
+					karpenterv1.PodDisruptionBudgetPolicyAnnotationKey: string(karpenterv1.PodDisruptionBudgetPolicyDisruptable),
+				},
+			},
+			Labels:         podLabels,
+			MaxUnavailable: lo.ToPtr(intstr.FromString("0%")),
+		})),
+		Entry("0 max unavailable", test.PodDisruptionBudget(test.PDBOptions{
+			ObjectMeta: metav1.ObjectMeta{
+				Annotations: map[string]string{
+					karpenterv1.PodDisruptionBudgetPolicyAnnotationKey: string(karpenterv1.PodDisruptionBudgetPolicyDisruptable),
+				},
+			},
+			Labels:         podLabels,
+			MaxUnavailable: lo.ToPtr(intstr.FromInt(0)),
+		})),
+	)
 })
 
 var _ = Describe("IsCurrentlyReschedulable", func() {
