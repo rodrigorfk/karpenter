@@ -312,6 +312,15 @@ func (p *Provisioner) Schedule(ctx context.Context) (scheduler.Results, error) {
 	if len(pods) == 0 {
 		return scheduler.Results{}, nil
 	}
+	if len(pendingPods) == 0 {
+		log.FromContext(ctx).WithValues(
+			"DeletingNodePods", pretty.Slice(lo.Map(deletingNodePods, func(p *corev1.Pod, _ int) string {
+				return klog.KObj(p).String()
+			}), 5),
+			"duration", time.Since(start),
+		).Info("found only deleting node pod(s), deferring scheduling decision")
+		return scheduler.Results{}, nil
+	}
 	log.FromContext(ctx).V(1).WithValues("pending-pods", len(pendingPods), "deleting-pods", len(deletingNodePods)).Info("computing scheduling decision for provisionable pod(s)")
 
 	opts := []scheduler.Options{scheduler.DisableReservedCapacityFallback}
@@ -363,7 +372,10 @@ func (p *Provisioner) Schedule(ctx context.Context) (scheduler.Results, error) {
 	)
 	if len(results.NewNodeClaims) > 0 {
 		log.FromContext(ctx).WithValues(
-			"Pods", pretty.Slice(lo.Map(pods, func(p *corev1.Pod, _ int) string {
+			"PendingPods", pretty.Slice(lo.Map(pendingPods, func(p *corev1.Pod, _ int) string {
+				return klog.KObj(p).String()
+			}), 5),
+			"DeletingNodePods", pretty.Slice(lo.Map(deletingNodePods, func(p *corev1.Pod, _ int) string {
 				return klog.KObj(p).String()
 			}), 5),
 			"duration", time.Since(start),
