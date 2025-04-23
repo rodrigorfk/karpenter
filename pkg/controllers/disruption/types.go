@@ -141,7 +141,7 @@ func (c Command) Decision() Decision {
 }
 
 func (c Command) LogValues() []any {
-	podCount := lo.Reduce(c.candidates, func(_ int, cd *Candidate, _ int) int { return len(cd.reschedulablePods) }, 0)
+	podCount := lo.Reduce(c.candidates, func(count int, cd *Candidate, _ int) int { return count + len(cd.reschedulablePods) }, 0)
 
 	candidateNodes := lo.Map(c.candidates, func(candidate *Candidate, _ int) interface{} {
 		return map[string]interface{}{
@@ -165,12 +165,18 @@ func (c Command) LogValues() []any {
 		}
 		return m
 	})
+	podNames := pretty.Slice(lo.Map(c.candidates, func(cd *Candidate, _ int) string {
+		return pretty.Slice(lo.Map(cd.reschedulablePods, func(p *corev1.Pod, _ int) string {
+			return klog.KObj(p).String()
+		}), 10)
+	}), 10)
 
 	return []any{
 		"decision", c.Decision(),
 		"disrupted-node-count", len(candidateNodes),
 		"replacement-node-count", len(replacementNodes),
 		"pod-count", podCount,
+		"pods", podNames,
 		"disrupted-nodes", candidateNodes,
 		"replacement-nodes", replacementNodes,
 	}

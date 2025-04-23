@@ -26,6 +26,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	karpenter_v1 "sigs.k8s.io/karpenter/pkg/apis/v1"
+
 	podutil "sigs.k8s.io/karpenter/pkg/utils/pod"
 )
 
@@ -104,6 +106,16 @@ func (l Limits) isEvictable(pod *v1.Pod, evictionBlocker evictionBlocker) (clien
 
 				switch evictionBlocker {
 				case zeroDisruptions:
+					// If the pod-disruption-budget-policy annotations is set to "disruptable" then the pod should be
+					// ignored, regardless of the PDB state, meaning the pod/node can be considered for eviction
+					// during karpenter's disruption process calculation, but might be blocked when a node is effectively
+					// being drained and the pod was supposed to be evicted, Karpenter won't be responsible
+					// for rescuing the pod/node on such situations, as an external controller would be responsible for
+					// that.
+					if pdb.policyValue == karpenter_v1.PodDisruptionBudgetPolicyDisruptable {
+						return client.ObjectKey{}, true
+					}
+
 					if pdb.disruptionsAllowed == 0 {
 						return pdb.key, false
 					}
@@ -140,6 +152,7 @@ type pdbItem struct {
 	disruptionsAllowed          int32
 	isFullyBlocking             bool
 	canAlwaysEvictUnhealthyPods bool
+	policyValue                 string
 }
 
 // nolint:gocyclo
@@ -149,6 +162,11 @@ func newPdb(pdb policyv1.PodDisruptionBudget) (*pdbItem, error) {
 		return nil, err
 	}
 	canAlwaysEvictUnhealthyPods := false
+
+	policyValue := ""
+	if value, ok := pdb.Annotations[karpenter_v1.PodDisruptionBudgetPolicyAnnotationKey]; ok {
+		policyValue = value
+	}
 
 	if pdb.Spec.UnhealthyPodEvictionPolicy != nil && *pdb.Spec.UnhealthyPodEvictionPolicy == policyv1.AlwaysAllow {
 		canAlwaysEvictUnhealthyPods = true
@@ -162,5 +180,6 @@ func newPdb(pdb policyv1.PodDisruptionBudget) (*pdbItem, error) {
 			(pdb.Spec.MaxUnavailable != nil && pdb.Spec.MaxUnavailable.Type == intstr.String && pdb.Spec.MaxUnavailable.StrVal == "0%") ||
 			(pdb.Spec.MinAvailable != nil && pdb.Spec.MinAvailable.Type == intstr.String && pdb.Spec.MinAvailable.StrVal == "100%"),
 		canAlwaysEvictUnhealthyPods: canAlwaysEvictUnhealthyPods,
+		policyValue:                 policyValue,
 	}, nil
 }

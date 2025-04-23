@@ -306,8 +306,10 @@ func (p *Provisioner) Schedule(ctx context.Context) (scheduler.Results, error) {
 	if err != nil {
 		return scheduler.Results{}, err
 	}
+	pendingPodsCount := len(pendingPods)
 
-	pods := append(pendingPods, deletingNodePods...)
+	pods := pendingPods
+	//pods := append(pendingPods, deletingNodePods...)
 	// nothing to schedule, so just return success
 	if len(pods) == 0 {
 		return scheduler.Results{}, nil
@@ -354,6 +356,17 @@ func (p *Provisioner) Schedule(ctx context.Context) (scheduler.Results, error) {
 			}), 5),
 		).Info("deferring scheduling decision for provisionable pod(s) to future simulation due to limited reserved offering capacity")
 	}
+
+	if pendingPodsCount == 0 && len(results.NewNodeClaims) > 0 {
+		log.FromContext(ctx).WithValues(
+			"DeletingNodePods", pretty.Slice(lo.Map(deletingNodePods, func(p *corev1.Pod, _ int) string {
+				return klog.KObj(p).String()
+			}), 5),
+			"duration", time.Since(start),
+		).Info("found only deleting node pod(s) that would trigger node claim creation, deferring scheduling decision")
+		return scheduler.Results{}, nil
+	}
+
 	scheduler.UnschedulablePodsCount.Set(
 		// A reserved offering error doesn't indicate a pod is unschedulable, just that the scheduling decision was deferred.
 		float64(len(results.PodErrors)-len(reservedOfferingErrors)),
@@ -363,7 +376,10 @@ func (p *Provisioner) Schedule(ctx context.Context) (scheduler.Results, error) {
 	)
 	if len(results.NewNodeClaims) > 0 {
 		log.FromContext(ctx).WithValues(
-			"Pods", pretty.Slice(lo.Map(pods, func(p *corev1.Pod, _ int) string {
+			"PendingPods", pretty.Slice(lo.Map(pendingPods, func(p *corev1.Pod, _ int) string {
+				return klog.KObj(p).String()
+			}), 5),
+			"DeletingNodePods", pretty.Slice(lo.Map(deletingNodePods, func(p *corev1.Pod, _ int) string {
 				return klog.KObj(p).String()
 			}), 5),
 			"duration", time.Since(start),
