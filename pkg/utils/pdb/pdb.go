@@ -94,16 +94,6 @@ func (l Limits) isEvictable(pod *v1.Pod, evictionBlocker evictionBlocker) (clien
 		if pdb.key.Namespace == pod.ObjectMeta.Namespace {
 			if pdb.selector.Matches(labels.Set(pod.Labels)) {
 
-				// If the pod-disruption-budget-policy annotations is set to "disruptable" then the pod should be
-				// ignored, regardless of the PDB state, meaning the pod/node can be considered for eviction
-				// during karpenter's disruption process calculation, but might be blocked when a node is effectively
-				// being drained and the pod was supposed to be evicted, Karpenter won't be responsible
-				// for rescuing the pod/node on such situations, as an external controller would be responsible for
-				// that.
-				if pdb.policyValue == karpenter_v1.PodDisruptionBudgetPolicyDisruptable {
-					return client.ObjectKey{}, true
-				}
-
 				// if the PDB policy is set to allow evicting unhealthy pods, then it won't stop us from
 				// evicting unhealthy pods
 				if pdb.canAlwaysEvictUnhealthyPods {
@@ -116,6 +106,16 @@ func (l Limits) isEvictable(pod *v1.Pod, evictionBlocker evictionBlocker) (clien
 
 				switch evictionBlocker {
 				case zeroDisruptions:
+					// If the pod-disruption-budget-policy annotations is set to "disruptable" then the pod should be
+					// ignored, regardless of the PDB state, meaning the pod/node can be considered for eviction
+					// during karpenter's disruption process calculation, but might be blocked when a node is effectively
+					// being drained and the pod was supposed to be evicted, Karpenter won't be responsible
+					// for rescuing the pod/node on such situations, as an external controller would be responsible for
+					// that.
+					if pdb.policyValue == karpenter_v1.PodDisruptionBudgetPolicyDisruptable {
+						return client.ObjectKey{}, true
+					}
+
 					if pdb.disruptionsAllowed == 0 {
 						return pdb.key, false
 					}
