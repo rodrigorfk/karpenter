@@ -229,6 +229,13 @@ func (c *Controller) executeCommand(ctx context.Context, m Method, cmd Command, 
 	// to do scheduling simulations and nominate the pods on the candidate nodes until
 	// the node is cleaned up.
 	schedulingResults.Record(log.IntoContext(ctx, operatorlogging.NopLogger), c.recorder, c.cluster)
+	for _, existing := range schedulingResults.ExistingNodes {
+		for _, p := range existing.Pods {
+			if existing.Node != nil && existing.NodeClaim != nil {
+				log.FromContext(ctx).WithValues("node", existing.Node.Name, "nodeClaim", existing.NodeClaim.Name, "pod", p.Name, "namespace", p.Namespace).Info("pod should scheduled on node after disruption")
+			}
+		}
+	}
 
 	statenodes := lo.Map(cmd.candidates, func(c *Candidate, _ int) *state.StateNode { return c.StateNode })
 	if err := c.queue.Add(orchestration.NewCommand(nodeClaimNames, statenodes, commandID, m.Reason(), m.ConsolidationType())); err != nil {
