@@ -3691,6 +3691,13 @@ var _ = Context("Scheduling", func() {
 				Labels:       podLabels,
 				MinAvailable: lo.ToPtr(intstr.FromString("100%")),
 			})),
+			Entry("0 disruptions allowed", test.PodDisruptionBudget(test.PDBOptions{
+				Labels:       podLabels,
+				MinAvailable: lo.ToPtr(intstr.FromInt32(1)),
+				Status: &policyv1.PodDisruptionBudgetStatus{
+					DisruptionsAllowed: 0,
+				},
+			})),
 		)
 	})
 

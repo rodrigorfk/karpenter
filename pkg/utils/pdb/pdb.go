@@ -120,7 +120,7 @@ func (l Limits) isEvictable(pod *v1.Pod, evictionBlocker evictionBlocker) (clien
 						return pdb.key, false
 					}
 				case fullyBlockingPDBs:
-					if pdb.isFullyBlocking {
+					if pdb.isFullyBlocking || pdb.disruptionsAllowed == 0 {
 						return pdb.key, false
 					}
 				}
