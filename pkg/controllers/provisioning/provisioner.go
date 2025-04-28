@@ -475,7 +475,7 @@ func (p *Provisioner) Validate(ctx context.Context, pod *corev1.Pod) error {
 	return multierr.Combine(
 		validateKarpenterManagedLabelCanExist(pod),
 		validateNodeSelector(pod),
-		validateAffinity(pod),
+		validateAffinity(ctx, pod),
 		p.volumeTopology.ValidatePersistentVolumeClaims(ctx, pod),
 	)
 }
@@ -525,13 +525,16 @@ func validateNodeSelector(p *corev1.Pod) (errs error) {
 	return errs
 }
 
-func validateAffinity(p *corev1.Pod) (errs error) {
+func validateAffinity(ctx context.Context, p *corev1.Pod) (errs error) {
+	policy := options.FromContext(ctx).PreferencePolicy
 	if p.Spec.Affinity == nil {
 		return nil
 	}
 	if p.Spec.Affinity.NodeAffinity != nil {
-		for _, term := range p.Spec.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution {
-			errs = multierr.Append(errs, validateNodeSelectorTerm(term.Preference))
+		if policy != options.PreferencePolicyIgnore {
+			for _, term := range p.Spec.Affinity.NodeAffinity.PreferredDuringSchedulingIgnoredDuringExecution {
+				errs = multierr.Append(errs, validateNodeSelectorTerm(term.Preference))
+			}
 		}
 		if p.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution != nil {
 			for _, term := range p.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms {
