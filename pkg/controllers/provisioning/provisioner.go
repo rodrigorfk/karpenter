@@ -308,7 +308,8 @@ func (p *Provisioner) Schedule(ctx context.Context) (scheduler.Results, error) {
 	}
 	pendingPodsCount := len(pendingPods)
 
-	pods := append(pendingPods, deletingNodePods...)
+	pods := pendingPods
+	//pods := append(pendingPods, deletingNodePods...)
 	// nothing to schedule, so just return success
 	if len(pods) == 0 {
 		return scheduler.Results{}, nil
