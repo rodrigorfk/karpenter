@@ -298,6 +298,7 @@ func (p *Provisioner) Schedule(ctx context.Context) (scheduler.Results, error) {
 	if err != nil {
 		return scheduler.Results{}, err
 	}
+	pendingPodsCount := len(pendingPods)
 
 	// Get pods from nodes that are preparing for deletion
 	// We do this after getting the pending pods so that we undershoot if pods are
@@ -308,7 +309,10 @@ func (p *Provisioner) Schedule(ctx context.Context) (scheduler.Results, error) {
 		return scheduler.Results{}, err
 	}
 
-	pods := append(pendingPods, deletingNodePods...)
+	pods := pendingPods
+	if !options.FromContext(ctx).IgnoreDeletingNodePods {
+		pods = append(pods, deletingNodePods...)
+	}
 	// nothing to schedule, so just return success
 	if len(pods) == 0 {
 		return scheduler.Results{}, nil
@@ -366,12 +370,24 @@ func (p *Provisioner) Schedule(ctx context.Context) (scheduler.Results, error) {
 		},
 	)
 	if len(results.NewNodeClaims) > 0 {
-		log.FromContext(ctx).WithValues(
-			"Pods", pretty.Slice(lo.Map(pods, func(p *corev1.Pod, _ int) string {
-				return klog.KObj(p).String()
-			}), 5),
-			"duration", time.Since(start),
-		).Info("found provisionable pod(s)")
+		if pendingPodsCount > 0 {
+			log.FromContext(ctx).WithValues(
+				"PendingPods", pretty.Slice(lo.Map(pendingPods, func(p *corev1.Pod, _ int) string {
+					return klog.KObj(p).String()
+				}), 5),
+				"DeletingNodePods", pretty.Slice(lo.Map(deletingNodePods, func(p *corev1.Pod, _ int) string {
+					return klog.KObj(p).String()
+				}), 5),
+				"duration", time.Since(start),
+			).Info("found provisionable pod(s)")
+		} else {
+			log.FromContext(ctx).WithValues(
+				"DeletingNodePods", pretty.Slice(lo.Map(deletingNodePods, func(p *corev1.Pod, _ int) string {
+					return klog.KObj(p).String()
+				}), 5),
+				"duration", time.Since(start),
+			).Info("found only deleting node pod(s)")
+		}
 	}
 	// Mark in memory when these pods were marked as schedulable or when we made a decision on the pods
 	p.cluster.MarkPodSchedulingDecisions(ctx, results.PodErrors, results.NodePoolToPodMapping(),
